@@ -1,14 +1,16 @@
 import os
 import secrets
+import jwt
+from datetime import datetime, timedelta
 from PIL import Image
-from flask import render_template, url_for, flash, redirect, request, abort
+from flask import render_template, url_for, flash, redirect, request, abort, jsonify
 from flaskblog import app, db, bcrypt, mail
 from flaskblog.forms import (RegistrationForm, LoginForm, UpdateAccountForm,
                              PostForm, RequestResetForm, ResetPasswordForm)
 from flaskblog.models import User, Post
 from flask_login import login_user, current_user, logout_user, login_required
 from flask_mail import Message
-
+from functools import wraps
 
 @app.route("/")
 @app.route("/home")
@@ -38,17 +40,43 @@ def register():
     return render_template('register.html', title='Register', form=form)
 
 
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        form = LoginForm()
+        token = request.args.get('token') #http://127.0.0.1:5000/route?token=alshfjfjdklsfj89549834ur
+
+        if not token:
+            flash('Token is missing!', 'danger')
+            return render_template('login.html', title='Login', form=form)
+
+        try: data = jwt.decode(token, app.config['SECRET_KEY'])
+
+        except:
+            flash('Your Token is Invalid', 'danger')
+            return render_template('login.html', title='Login', form=form)
+
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route("/login", methods=['GET', 'POST'])
 def login():
+
     if current_user.is_authenticated:
         return redirect(url_for('home'))
     form = LoginForm()
+
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and bcrypt.check_password_hash(user.password, form.password.data):
             login_user(user, remember=form.remember.data)
+            token = jwt.encode({'email': form.email.data,'exp' : datetime.utcnow() + timedelta(minutes = 30)
+            }, app.config['SECRET_KEY'])
             next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('home'))
+            #flash('Your Token : '+token.decode('UTF-8'), 'success')
+            return redirect(next_page) if next_page else redirect(url_for('home', token=token))
+
         else:
             flash('Login Unsuccessful. Please check email and password', 'danger')
     return render_template('login.html', title='Login', form=form)
@@ -76,6 +104,7 @@ def save_picture(form_picture):
 
 @app.route("/account", methods=['GET', 'POST'])
 @login_required
+@token_required
 def account():
     form = UpdateAccountForm()
     if form.validate_on_submit():
@@ -97,6 +126,7 @@ def account():
 
 @app.route("/post/new", methods=['GET', 'POST'])
 @login_required
+@token_required
 def new_post():
     form = PostForm()
     if form.validate_on_submit():
@@ -117,6 +147,7 @@ def post(post_id):
 
 @app.route("/post/<int:post_id>/update", methods=['GET', 'POST'])
 @login_required
+@token_required
 def update_post(post_id):
     post = Post.query.get_or_404(post_id)
     if post.author != current_user:
@@ -137,6 +168,7 @@ def update_post(post_id):
 
 @app.route("/post/<int:post_id>/delete", methods=['POST'])
 @login_required
+@token_required
 def delete_post(post_id):
     post = Post.query.get_or_404(post_id)
     if post.author != current_user:
