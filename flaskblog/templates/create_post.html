@@ -31,7 +31,9 @@
                     {{ form.content(class="form-control form-control-lg") }}
                 {% endif %}
             </div>
+            
         </fieldset>
+            <a href="{{ url_for('upload') }}">Upload</a>
         <div class="form-group">
             {{ form.submit(class="btn btn-outline-info") }}
         </div>

@@ -1,6 +1,8 @@
 import os
 import secrets
+from flask_wtf import file
 import jwt
+import pandas as pd
 from datetime import datetime, timedelta
 from PIL import Image
 from flask import render_template, url_for, flash, redirect, request, abort, jsonify
@@ -11,6 +13,7 @@ from flaskblog.models import User, Post
 from flask_login import login_user, current_user, logout_user, login_required
 from flask_mail import Message
 from functools import wraps
+
 
 @app.route("/")
 @app.route("/home")
@@ -48,7 +51,7 @@ def token_required(f):
         token = request.args.get('token') #http://127.0.0.1:5000/route?token=alshfjfjdklsfj89549834ur
 
         if not token:
-            flash('Token is missing!', 'danger')
+            flash('Your Token is Missing!', 'danger')
             return render_template('login.html', title='Login', form=form)
 
         try: data = jwt.decode(token, app.config['SECRET_KEY'])
@@ -59,6 +62,7 @@ def token_required(f):
 
         return f(*args, **kwargs)
     return decorated
+
 
 @app.route("/login", methods=['GET', 'POST'])
 def login():
@@ -71,7 +75,7 @@ def login():
         user = User.query.filter_by(email=form.email.data).first()
         if user and bcrypt.check_password_hash(user.password, form.password.data):
             login_user(user, remember=form.remember.data)
-            token = jwt.encode({'email': form.email.data,'exp' : datetime.utcnow() + timedelta(minutes = 30)
+            token = jwt.encode({'email': form.email.data,'exp' : datetime.utcnow() + timedelta(minutes = 300)
             }, app.config['SECRET_KEY'])
             next_page = request.args.get('next')
             #flash('Your Token : '+token.decode('UTF-8'), 'success')
@@ -129,6 +133,7 @@ def account():
 @token_required
 def new_post():
     form = PostForm()
+   
     if form.validate_on_submit():
         post = Post(title=form.title.data, content=form.content.data, author=current_user)
         db.session.add(post)
@@ -138,6 +143,45 @@ def new_post():
     return render_template('create_post.html', title='New Post',
                            form=form, legend='New Post')
 
+# def parseCSV(filePath):
+#     form = PostForm()
+#     # CVS Column Names
+#     col_names = ['title','content']
+#     # Use Pandas to parse the CSV file
+#     csvData = pd.read_csv(filePath,names=col_names, header=None)
+#     # Loop through the Rows
+#     for i,row in csvData.iterrows():
+#         post = Post(title=form.title.data, content=form.content.data, author=current_user)
+#         db.session.add(post)
+#         db.session.commit()
+#         print(i,row['title'],row['content'],row[current_user],)
+
+
+@app.route("/post/new/upload", methods=['GET', 'POST'])
+@login_required
+# @token_required
+def upload():
+    if request.method == 'POST':
+        upload_file = request.files['file']
+        file_path = os.path.join(app.root_path, 'static/upload_folder',upload_file.filename)
+        upload_file.save(file_path)
+        parseCSV(file_path)
+        flash('Your post has been created!', 'success')
+        return redirect(url_for('home'))
+    return render_template('upload.html', title='Upload File')
+def parseCSV(filePath):
+    form = PostForm()
+    # CVS Column Names
+    col_names = ['title','content']
+    # Use Pandas to parse the CSV file
+    csvData = pd.read_csv(filePath,names=col_names, header=None)
+    # Loop through the Rows
+    for i,row in csvData.iterrows():
+        post = Post(title=row['title'], content=row['content'], author=current_user)
+        db.session.add(post)
+        db.session.commit()
+        print(i,row['title'],row['content'],)
+    return redirect(url_for('home'))
 
 @app.route("/post/<int:post_id>")
 def post(post_id):
@@ -147,7 +191,7 @@ def post(post_id):
 
 @app.route("/post/<int:post_id>/update", methods=['GET', 'POST'])
 @login_required
-@token_required
+# @token_required
 def update_post(post_id):
     post = Post.query.get_or_404(post_id)
     if post.author != current_user:
@@ -168,7 +212,7 @@ def update_post(post_id):
 
 @app.route("/post/<int:post_id>/delete", methods=['POST'])
 @login_required
-@token_required
+# @token_required
 def delete_post(post_id):
     post = Post.query.get_or_404(post_id)
     if post.author != current_user:

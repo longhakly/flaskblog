@@ -1,3 +1,4 @@
+from os import name
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from flask_login import current_user
@@ -59,9 +60,9 @@ class UpdateAccountForm(FlaskForm):
 class PostForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired()])
     content = TextAreaField('Content', validators=[DataRequired()])
+    f_file = FileField('csv_file', validators=[FileAllowed(['csv'])])
     submit = SubmitField('Post')
-
-
+    
 class RequestResetForm(FlaskForm):
     email = StringField('Email',
                         validators=[DataRequired(), Email()])
